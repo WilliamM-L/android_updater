@@ -99,7 +99,6 @@ fn phone_files(phone_dir: &str) -> HashMap<String, u64> {
         Ok(stdout) => stdout,
         Err(_) => return HashMap::new(),
     };
-    dbg!(&output);
     let prefix_len = phone_dir.trim_end_matches('/').len() + 1; // +1 for the /
     output.lines()
         .filter_map(|line| {
@@ -167,7 +166,6 @@ fn sync(mapping: &Mapping, dry_run: bool) {
         .map(|(path, _)| path.to_string_lossy().into_owned())
         .collect();
 
-    dbg!(&remote_files);
     for (relative_path, local_modified_time) in &local_file_list {
         let relative_path_str = relative_path.to_string_lossy();
         let remote_file = remote_files.get(relative_path_str.as_ref());
