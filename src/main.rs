@@ -65,6 +65,7 @@ impl std::fmt::Display for AdbError {
 }
 
 fn adb(args: &[&str]) -> Result<String, String> {
+    dbg!(args);
     let output = Command::new("adb")
         .args(args)
         .output()
@@ -185,12 +186,15 @@ fn sync(mapping: &Mapping, dry_run: bool) {
         } else {
             // ensure parent dir exists on phone
             if let Some(parent_dir) = Path::new(&remote_file_path).parent() {
-                let _ = adb(&["shell", "mkdir", "-p", &parent_dir.to_string_lossy()]);
+                match adb(&["shell", "mkdir", "-p", &parent_dir.to_string_lossy()]){
+                    Ok(_) => {},
+                    Err(error) => println!("FAILED to create directory: {error}"),
+                }
             }
             print!("  pushing {relative_path_str} ... ");
             match adb(&["push", &local_file_path.to_string_lossy(), &remote_file_path]) {
                 Ok(_) => println!("ok"),
-                Err(error) => println!("FAILED: {error}"),
+                Err(error) => println!("FAILED to push: {error}"),
             }
         }
         push_count += 1;
@@ -207,7 +211,8 @@ fn sync(mapping: &Mapping, dry_run: bool) {
             println!("  [dry-run] would delete {remote_relative}");
         } else {
             print!("  deleting {remote_relative} ... ");
-            match adb(&["shell", "rm", &remote_file_path]) {
+            let rm_cmd = format!("rm '{}'", remote_file_path.replace('\'', "'\\''"));
+            match adb(&["shell", &rm_cmd]) {
                 Ok(_) => println!("ok"),
                 Err(error) => println!("FAILED: {error}"),
             }
