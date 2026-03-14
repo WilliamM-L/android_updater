@@ -1,0 +1,5 @@
+# Each line maps a local directory to a phone directory.
+# Format: /local/path -> /phone/path
+
+/home/user/music  -> /sdcard/Music
+/home/user/docs   -> /sdcard/Documents
