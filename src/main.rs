@@ -65,7 +65,6 @@ impl std::fmt::Display for AdbError {
 }
 
 fn adb(args: &[&str]) -> Result<String, String> {
-    dbg!(args);
     let output = Command::new("adb")
         .args(args)
         .output()
@@ -75,6 +74,20 @@ fn adb(args: &[&str]) -> Result<String, String> {
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
     }
+}
+
+fn adb_push(local: &str, remote: &str) -> Result<(), String> {
+    for attempt in 1..=10 {
+        adb(&["push", local, remote])?;
+        let size_output = adb(&["shell", "stat", "-c", "%s", remote])?;
+        let size: u64 = size_output.trim().parse().unwrap_or(0);
+        if size > 0 {
+            return Ok(());
+        }
+        eprintln!("  attempt {attempt}/10: pushed file is 0 bytes, retrying...");
+    }
+    eprintln!("error: failed to push {local} -> {remote} (0 bytes after 10 attempts)");
+    std::process::exit(1);
 }
 
 fn adb_check() -> Result<(), AdbError> {
@@ -171,7 +184,18 @@ fn sync(mapping: &Mapping, dry_run: bool) {
         let relative_path_str = relative_path.to_string_lossy();
         let remote_file = remote_files.get(relative_path_str.as_ref());
         let needs_push = match remote_file {
-            Some(&phone_modified_time) => *local_modified_time > phone_modified_time,
+            Some(&phone_modified_time) => {
+                let diff = local_modified_time.abs_diff(phone_modified_time);
+                let to_push = *local_modified_time > phone_modified_time && diff > 3600;
+                if to_push {
+                    // println!("Pushing for file: {}", relative_path_str);
+                    // println!("pc file modified time:    {}", *local_modified_time);
+                    // println!("phone file modified time: {}", phone_modified_time);
+                } else if *local_modified_time > phone_modified_time {
+                    println!("  warning: {relative_path_str} differs by {diff}s (<1h), skipping (likely DST)");
+                }
+                to_push
+            },
             None => true,
         };
         if !needs_push {
@@ -192,8 +216,8 @@ fn sync(mapping: &Mapping, dry_run: bool) {
                 }
             }
             print!("  pushing {relative_path_str} ... ");
-            match adb(&["push", &local_file_path.to_string_lossy(), &remote_file_path]) {
-                Ok(_) => println!("ok"),
+            match adb_push(&local_file_path.to_string_lossy(), &remote_file_path) {
+                Ok(()) => println!("ok"),
                 Err(error) => println!("FAILED to push: {error}"),
             }
         }
